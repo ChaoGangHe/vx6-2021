@@ -6,7 +6,9 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
-
+#include "sysinfo.h"
+uint64 acquire_freemem();
+uint64 acquire_nproc();
 uint64
 sys_exit(void)
 {
@@ -52,6 +54,29 @@ sys_sbrk(void)
   return addr;
 }
 
+int
+sys_pgaccess(void)
+{
+  // lab pgtbl: your code here.
+    uint64 addr;
+    int len;
+    int bitmask;
+    if(argaddr(0,&addr)<0) return -1;
+    if(argint(1,&len)<0) return -1;
+    if(argint(2,&bitmask)<0) return -1;
+    
+    if(len>32||len<0) return -1;
+    int res = 0;
+
+    struct proc *p = myproc();
+    for(int i=0;i<len;i++){
+      int va = addr + i*PGSIZE;
+      int abits = vm_pgaccess(p->pagetable,va);
+      res = res | abits<<i;
+    }
+    if(copyout(p->pagetable,bitmask,(char*)&res,sizeof(res))<0) return -1;
+    return 0;
+}
 uint64
 sys_sleep(void)
 {
@@ -94,4 +119,30 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint 
+sys_trace(void)
+{
+  int mask;
+  if(argint(0, &mask) < 0)
+    return -1;
+  struct proc *p = myproc();
+  p->trace_mask = mask;
+  return 0;
+}
+uint64 
+sys_sysinfo(void)
+{
+  struct sysinfo info;
+  uint64 addr;
+  struct proc *p = myproc();
+  info.nproc = acquire_nproc();
+  info.freemem = acquire_freemem();
+  if(argaddr(0, &addr) < 0)
+    return -1;
+  if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0)
+    return -1;
+  printf("sysinfo say hi\n");
+  return 0;
 }
