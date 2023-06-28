@@ -7,6 +7,7 @@
 #include "defs.h"
 
 struct spinlock tickslock;
+struct trapframe;
 uint ticks;
 
 extern char trampoline[], uservec[], userret[];
@@ -33,6 +34,42 @@ trapinithart(void)
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
+void
+strore(void)
+{
+  struct proc* p = myproc();
+  p->ticks_ra = p->trapframe->ra;
+  p->ticks_sp = p->trapframe->sp;
+  p->ticks_gp = p->trapframe->gp;
+  p->ticks_tp = p->trapframe->tp;
+  p->ticks_t0 = p->trapframe->t0;
+  p->ticks_t1 = p->trapframe->t1;
+  p->ticks_s0 = p->trapframe->s0;
+  p->ticks_s1 = p->trapframe->s1;
+  p->ticks_a0 = p->trapframe->a0;
+  p->ticks_a1 = p->trapframe->a1;
+  p->ticks_a2 = p->trapframe->a2;
+  p->ticks_a3 = p->trapframe->a3;
+  p->ticks_a4 = p->trapframe->a4;
+  p->ticks_a5 = p->trapframe->a5;
+  p->ticks_a6 = p->trapframe->a6;
+  p->ticks_a7 = p->trapframe->a7;
+  p->ticks_s2 = p->trapframe->s2;
+  p->ticks_s3 = p->trapframe->s3;
+  p->ticks_s4 = p->trapframe->s4;
+  p->ticks_s5 = p->trapframe->s5;
+  p->ticks_s6 = p->trapframe->s6;
+  p->ticks_s7 = p->trapframe->s7;
+  p->ticks_s8 = p->trapframe->s8;
+  p->ticks_s9 = p->trapframe->s9;
+  p->ticks_s10 = p->trapframe->s10;
+  p->ticks_s11 = p->trapframe->s11;
+  p->ticks_t3 = p->trapframe->t3;
+  p->ticks_t4 = p->trapframe->t4;
+  p->ticks_t5 = p->trapframe->t5;
+  p->ticks_t6 = p->trapframe->t6;
+
+}
 void
 usertrap(void)
 {
@@ -67,7 +104,19 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if(r_scause()==13||r_scause()==15){
+    uint64 va = r_stval();
+    if(is_lazy_alloc_va(va)){
+      if(lazy_alloc(va)<0){
+        printf("lazy_alloc is failed!\n");
+        p->killed = 1;
+      }
+    }else{
+      printf("用户进程正在试图访问一个非法的虚拟地址\n");
+      p->killed = 1;
+    }
+  } 
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -78,7 +127,20 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
+  {
+    if(p->ticks>0){
+      p->ticks_cnt++;
+      if(p->handler_executing==0 && p->ticks_cnt>p->ticks){
+          p->ticks_cnt = 0;
+          p->ticks_epc = p->trapframe->epc;
+          strore();
+          p->handler_executing = 1;
+          p->trapframe->epc = p->handler;
+      }
+    }
     yield();
+  }
+    
 
   usertrapret();
 }

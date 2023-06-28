@@ -105,4 +105,40 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int ticks;
+  int ticks_cnt;
+  uint64 handler;
+  uint64 ticks_epc;
+  int handler_executing;
+  /*  40 */ uint64 ticks_ra;
+  /*  48 */ uint64 ticks_sp;
+  /*  56 */ uint64 ticks_gp;
+  /*  64 */ uint64 ticks_tp;
+  /*  72 */ uint64 ticks_t0;
+  /*  80 */ uint64 ticks_t1;
+  /*  88 */ uint64 ticks_t2;
+  /*  96 */ uint64 ticks_s0;
+  /* 104 */ uint64 ticks_s1;
+  /* 112 */ uint64 ticks_a0;
+  /* 120 */ uint64 ticks_a1;
+  /* 128 */ uint64 ticks_a2;
+  /* 136 */ uint64 ticks_a3;
+  /* 144 */ uint64 ticks_a4;
+  /* 152 */ uint64 ticks_a5;
+  /* 160 */ uint64 ticks_a6;
+  /* 168 */ uint64 ticks_a7;
+  /* 176 */ uint64 ticks_s2;
+  /* 184 */ uint64 ticks_s3;
+  /* 192 */ uint64 ticks_s4;
+  /* 200 */ uint64 ticks_s5;
+  /* 208 */ uint64 ticks_s6;
+  /* 216 */ uint64 ticks_s7;
+  /* 224 */ uint64 ticks_s8;
+  /* 232 */ uint64 ticks_s9;
+  /* 240 */ uint64 ticks_s10;
+  /* 248 */ uint64 ticks_s11;
+  /* 256 */ uint64 ticks_t3;
+  /* 264 */ uint64 ticks_t4;
+  /* 272 */ uint64 ticks_t5;
+  /* 280 */ uint64 ticks_t6;
 };
