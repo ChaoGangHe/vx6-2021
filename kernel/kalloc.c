@@ -21,13 +21,60 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
+  char *ref_page;
+  int page_cnt;
+  char* end_;
 } kmem;
 
+
+int pagecnt(void *pa_strat,void *pa_end){
+  char *p;
+  int cnt;
+  p = (char*)PGROUNDUP((uint64)pa_strat);
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
+    kmem.page_cnt++;
+  cnt = kmem.page_cnt;
+  return cnt;
+}
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  kmem.page_cnt = pagecnt(end,(void*)PHYSTOP);
+  printf("page_cnt:%d\n",kmem.page_cnt);
+  
+
+  kmem.ref_page = end;
+  for(int i=0;i<kmem.page_cnt;++i){
+    kmem.ref_page[i]=0;
+  }
+  kmem.end_= kmem.page_cnt + kmem.ref_page;
+  freerange(kmem.end_, (void*)PHYSTOP);
+}
+
+int page_index(uint64 pa){
+  pa = PGROUNDDOWN(pa);
+  int res = (pa-(uint64)kmem.end_)/PGSIZE;
+  if(res<0||res>=kmem.page_cnt){
+    printf("res:%d,pa:%p,kmem.end_:%p\n",res,pa,kmem.end_);
+    panic("page_index illegal\n");
+  }
+  return res;
+}
+
+void
+incr(void *pa){
+  int index = page_index((uint64)pa);
+  acquire(&kmem.lock);
+  kmem.ref_page[index]++;
+  release(&kmem.lock);
+}
+void
+desc(void *pa){
+  int index = page_index((uint64)pa);
+  acquire(&kmem.lock);
+  kmem.ref_page[index]--;
+  release(&kmem.lock);
 }
 
 void
@@ -46,6 +93,15 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
+
+    int index = page_index((uint64)pa);
+    if(kmem.ref_page[index]>1){
+      desc(pa);
+      return;
+    }
+
+    if(kmem.ref_page[index]==1) desc(pa);
+
   struct run *r;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
@@ -65,6 +121,19 @@ kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
+void 
+print_free_pages_cnt(){
+  struct run *r;
+  int cnt = 0;
+  acquire(&kmem.lock);
+  r = kmem.freelist;
+  while(r->next){
+    r=r->next;
+    cnt++;
+  }
+  release(&kmem.lock);
+  printf("free_pages_cnt:%d\n",cnt);
+}
 void *
 kalloc(void)
 {
@@ -76,7 +145,11 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    //print_free_pages_cnt();
+    incr(r);
+  }
+    
   return (void*)r;
 }
